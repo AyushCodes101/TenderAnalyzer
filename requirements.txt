@@ -1,0 +1,30 @@
+# Web API dependencies
+fastapi>=0.95.0
+uvicorn>=0.22.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
+
+# Logging
+loguru>=0.7.0
+
+# PDF processing dependencies
+pytesseract>=0.3.10
+pdf2image>=1.16.3
+pypdf>=3.15.1
+reportlab>=4.0.0
+Pillow>=9.5.0
+
+# LLM dependencies
+langchain>=0.0.300
+langchain-community>=0.0.10
+langchain-core>=0.1.0
+ollama>=0.1.0
+
+# Vector store dependencies
+faiss-cpu>=1.7.4
+sentence-transformers>=2.2.2
+
+# Utilities
+tqdm>=4.65.0
+python-dotenv>=1.0.0
+requests>=2.31.0 
