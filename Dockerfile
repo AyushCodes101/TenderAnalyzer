@@ -1,29 +1,31 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bullseye
 
-# Install Tesseract OCR and other dependencies
-RUN apt-get update && apt-get install -y \
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     poppler-utils \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
 COPY . .
 
-# Create directories for uploads and output
+RUN find . -type d -name '__pycache__' -exec rm -r {} + \
+    && find . -name '*.pyc' -delete
+
 RUN mkdir -p uploads output
 
-# Expose the port
 EXPOSE 80
 
-# Run the application
-CMD ["python", "tender_analyzer/main.py"] 
+CMD ["python", "tender_analyzer/main.py"]
