@@ -111,13 +111,19 @@ jobs:
         IMAGE_TAG=${BRANCH_NAME}-${COMMIT_HASH}
     
         echo 'Creating SCP expect script...'
-        cat <<EOF > scp_expect.sh
-            #!/usr/bin/expect -f
-            spawn scp -o StrictHostKeyChecking=no docker-compose.yml $env(USER)@$env(HOST):~/docker-compose.yml
-            expect "password:"
-            send "$env(PASSWORD)\r"
-            expect eof
+        cat <<'EOF' > scp_expect.sh
+          #!/usr/bin/expect -f
+          set timeout 60
+          set host $env(HOST)
+          set user $env(USER)
+          set password $env(PASSWORD)
+
+          spawn scp -o StrictHostKeyChecking=no docker-compose.yml ${user}@${host}:~/docker-compose.yml
+          expect "password:"
+          send "$password\r"
+          expect eof
         EOF
+
         chmod +x scp_expect.sh
         ./scp_expect.sh
     
