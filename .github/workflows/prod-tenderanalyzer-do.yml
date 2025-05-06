@@ -86,10 +86,11 @@ jobs:
         docker build -t $DOCR_REGISTRY/$DOCR_REPOSITORY:$IMAGE_TAG .
         docker push $DOCR_REGISTRY/$DOCR_REPOSITORY:$IMAGE_TAG
 
-    - name: Install expect
-      run: sudo apt-get update && sudo apt-get install -y expect
+    - name: Install sshpass
+      run: sudo apt-get update && sudo apt-get install -y sshpass
 
-    - name: Deploy on Droplet (Password-based)
+
+      - name: Deploy on Droplet using sshpass
       env:
         DOCR_REGISTRY: ${{ vars.DOCR_REGISTRY }}
         DOCR_REPOSITORY: ${{ vars.DOCR_REPOSITORY }}
@@ -102,53 +103,19 @@ jobs:
       run: |
         IMAGE_TAG=${BRANCH_NAME}-${COMMIT_HASH}
 
-        echo 'Creating SCP expect script...'
-        cat <<'EOF' > scp_expect.sh
-        #!/usr/bin/expect -f
-        set timeout 60
-        set host $env(HOST)
-        set user $env(USER)
-        set password $env(PASSWORD)
+        echo "Copying docker-compose.yml to server..."
+        sshpass -p "$PASSWORD" scp -o StrictHostKeyChecking=no docker-compose.yml ${USER}@${HOST}:~/docker-compose.yml
 
-        spawn scp -o StrictHostKeyChecking=no docker-compose.yml ${user}@${host}:~/docker-compose.yml
-        expect "password:"
-        send "$password\r"
-        expect eof
-        EOF
-
-        chmod +x scp_expect.sh
-        ./scp_expect.sh
-
-
-        echo 'Creating SSH expect script for remote commands...'
-        cat <<EOF > ssh_expect.sh
-        #!/usr/bin/expect -f
-        set timeout 300
-        set host "$env(HOST)"
-        set user "$env(USER)"
-        set password "$env(PASSWORD)"
-        set registry "$env(DOCR_REGISTRY)"
-        set repo "$env(DOCR_REPOSITORY)"
-        set image_tag "$env(BRANCH_NAME)-$env(COMMIT_HASH)"
-        set token "$env(DOCR_TOKEN)"
-
-        spawn ssh -o StrictHostKeyChecking=no \${user}@\${host}
-        expect "password:"
-        send "\$password\r"
-        expect "\$ "
-        send "if ! command -v docker-compose > /dev/null; then sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.4/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose; fi\r"
-        expect "\$ "
-        send "echo '\$token' | docker login -u doctl --password-stdin \$registry\r"
-        expect "\$ "
-        send "docker pull \$registry/\$repo:\$image_tag\r"
-        expect "\$ "
-        send "sed -i 's|image: .*|image: \$registry/\$repo:\$image_tag|' docker-compose.yml\r"
-        expect "\$ "
-        send "docker-compose pull && docker-compose down && docker-compose up -d\r"
-        expect "\$ "
-        send "exit\r"
-        expect eof
-        EOF
-
-        chmod +x ssh_expect.sh
-        ./ssh_expect.sh
+        echo "Running remote deployment commands..."
+        sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no ${USER}@${HOST} 
+        if ! command -v docker-compose > /dev/null; then
+          sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.4/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+        fi
+        echo "$DOCR_TOKEN" | docker login -u doctl --password-stdin $DOCR_REGISTRY
+        docker pull $DOCR_REGISTRY/$DOCR_REPOSITORY:$IMAGE_TAG
+        sed -i 's|image: .*|image: '"$DOCR_REGISTRY"'/'"$DOCR_REPOSITORY"':'"$IMAGE_TAG"'|' docker-compose.yml
+        docker-compose pull
+        docker-compose down
+        docker-compose up -d
+        
