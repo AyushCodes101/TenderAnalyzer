@@ -27,7 +27,6 @@ jobs:
 
     - name: Install jq
       run: sudo apt-get update && sudo apt-get install -y jq
-    
 
     - name: Delete old images, repository, and trigger garbage collection
       env:
@@ -76,8 +75,6 @@ jobs:
         echo "Garbage collection trigger response:"
         echo "$GC_RESPONSE"
 
-
-
     - name: Build, Tag, and Push Docker Image
       env:
         DOCR_REGISTRY: ${{ vars.DOCR_REGISTRY }}
@@ -89,14 +86,9 @@ jobs:
         docker build -t $DOCR_REGISTRY/$DOCR_REPOSITORY:$IMAGE_TAG .
         docker push $DOCR_REGISTRY/$DOCR_REPOSITORY:$IMAGE_TAG
 
-    # - name: Setup SSH Agent
-    #   uses: webfactory/ssh-agent@v0.9.0
-    #   with:
-    #     ssh-private-key: ${{ secrets.DROPLET_SSH_KEY }}
-
     - name: Install expect
       run: sudo apt-get update && sudo apt-get install -y expect
-    
+
     - name: Deploy on Droplet (Password-based)
       env:
         DOCR_REGISTRY: ${{ vars.DOCR_REGISTRY }}
@@ -109,45 +101,53 @@ jobs:
         PASSWORD: ${{ secrets.DROPLET_PASSWORD }}
       run: |
         IMAGE_TAG=${BRANCH_NAME}-${COMMIT_HASH}
-    
-        echo 'Creating SCP expect script...'
-        cat <<'EOF' > scp_expect.sh
-          #!/usr/bin/expect -f
-          set timeout 60
-          set host $env(HOST)
-          set user $env(USER)
-          set password $env(PASSWORD)
 
-          spawn scp -o StrictHostKeyChecking=no docker-compose.yml ${user}@${host}:~/docker-compose.yml
-          expect "password:"
-          send "$password\r"
-          expect eof
+        echo 'Creating SCP expect script...'
+        cat <<EOF > scp_expect.sh
+        #!/usr/bin/expect -f
+        set timeout 60
+        set host "$env(HOST)"
+        set user "$env(USER)"
+        set password "$env(PASSWORD)"
+
+        spawn scp -o StrictHostKeyChecking=no docker-compose.yml \${user}@\${host}:~/docker-compose.yml
+        expect "password:"
+        send "\$password\r"
+        expect eof
         EOF
 
         chmod +x scp_expect.sh
         ./scp_expect.sh
-    
+
         echo 'Creating SSH expect script for remote commands...'
         cat <<EOF > ssh_expect.sh
-            #!/usr/bin/expect -f
-            set timeout 300
-            spawn ssh -o StrictHostKeyChecking=no $env(USER)@$env(HOST)
-            expect "password:"
-            send "$env(PASSWORD)\r"
-            expect "\$ "
-            send "if ! command -v docker-compose > /dev/null; then sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.4/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose; fi\r"
-            expect "\$ "
-            send "echo '$env(DOCR_TOKEN)' | docker login -u doctl --password-stdin $env(DOCR_REGISTRY)\r"
-            expect "\$ "
-            send "docker pull $env(DOCR_REGISTRY)/$env(DOCR_REPOSITORY):$IMAGE_TAG\r"
-            expect "\$ "
-            send "sed -i 's|image: .*|image: $env(DOCR_REGISTRY)/$env(DOCR_REPOSITORY):$IMAGE_TAG|' docker-compose.yml\r"
-            expect "\$ "
-            send "docker-compose pull && docker-compose down && docker-compose up -d\r"
-            expect "\$ "
-            send "exit\r"
-            expect eof
+        #!/usr/bin/expect -f
+        set timeout 300
+        set host "$env(HOST)"
+        set user "$env(USER)"
+        set password "$env(PASSWORD)"
+        set registry "$env(DOCR_REGISTRY)"
+        set repo "$env(DOCR_REPOSITORY)"
+        set image_tag "$env(BRANCH_NAME)-$env(COMMIT_HASH)"
+        set token "$env(DOCR_TOKEN)"
+
+        spawn ssh -o StrictHostKeyChecking=no \${user}@\${host}
+        expect "password:"
+        send "\$password\r"
+        expect "\$ "
+        send "if ! command -v docker-compose > /dev/null; then sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.4/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose; fi\r"
+        expect "\$ "
+        send "echo '\$token' | docker login -u doctl --password-stdin \$registry\r"
+        expect "\$ "
+        send "docker pull \$registry/\$repo:\$image_tag\r"
+        expect "\$ "
+        send "sed -i 's|image: .*|image: \$registry/\$repo:\$image_tag|' docker-compose.yml\r"
+        expect "\$ "
+        send "docker-compose pull && docker-compose down && docker-compose up -d\r"
+        expect "\$ "
+        send "exit\r"
+        expect eof
         EOF
+
         chmod +x ssh_expect.sh
         ./ssh_expect.sh
-    
