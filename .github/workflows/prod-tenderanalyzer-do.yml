@@ -90,7 +90,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y sshpass
 
 
-      - name: Deploy on Droplet using sshpass
+    - name: Deploy on Droplet using sshpass
       env:
         DOCR_REGISTRY: ${{ vars.DOCR_REGISTRY }}
         DOCR_REPOSITORY: ${{ vars.DOCR_REPOSITORY }}
